@@ -73,6 +73,7 @@ class Canvas(QWidget):
         self.hideNormal = False
         self.canOutOfBounding = False
         self.showCenter = False
+        self.pan_initial_pos = QPoint()
 
     def enterEvent(self, ev):
         self.overrideCursor(self._cursor)
@@ -172,6 +173,13 @@ class Canvas(QWidget):
                 self.shapeMoved.emit()
                 self.repaint()
                 self.status.emit("(%d,%d)." % (pos.x(), pos.y()))
+            else:
+                #pan
+                delta_x = pos.x() - self.pan_initial_pos.x()
+                delta_y = pos.y() - self.pan_initial_pos.y()
+                self.scrollRequest.emit(delta_x, Qt.Horizontal)
+                self.scrollRequest.emit(delta_y, Qt.Vertical)
+                self.update()
             return
 
         # Just hovering over the canvas, 2 posibilities:
@@ -220,9 +228,14 @@ class Canvas(QWidget):
             if self.drawing():
                 self.handleDrawing(pos)
             else:                
-                self.selectShapePoint(pos)
+                # self.selectShapePoint(pos)
+                selection = self.selectShapePoint(pos)
                 self.prevPoint = pos
-                self.repaint()
+                # self.repaint()
+                if selection is None:
+                    #pan
+                    QApplication.setOverrideCursor(QCursor(Qt.OpenHandCursor))
+                    self.pan_initial_pos = pos
         elif ev.button() == Qt.RightButton and self.editing():
             self.selectShapePoint(pos)
             self.hideBackroundShapes(True)
@@ -231,7 +244,8 @@ class Canvas(QWidget):
             #     self.selectedShape.rotate(10)
 
             self.prevPoint = pos
-            self.repaint()
+            # self.repaint()
+            self.update()
 
     def mouseReleaseEvent(self, ev):  
         self.hideBackroundShapes(False)      
@@ -249,6 +263,9 @@ class Canvas(QWidget):
             pos = self.transformPos(ev.pos())
             if self.drawing():
                 self.handleDrawing(pos)
+            else:
+                #pan
+                QApplication.restoreOverrideCursor()
 
     def endMove(self, copy=False):
         assert self.selectedShape and self.selectedShapeCopy
@@ -330,7 +347,9 @@ class Canvas(QWidget):
             self.setHiding()
             self.selectionChanged.emit(True)
 
-            return
+            # return
+            return self.hVertex
+
         for shape in reversed(self.shapes):
             if self.isVisible(shape) and shape.containsPoint(point):
                 shape.selected = True
@@ -338,7 +357,9 @@ class Canvas(QWidget):
                 self.calculateOffsets(shape, point)
                 self.setHiding()
                 self.selectionChanged.emit(True)
-                return
+                # return
+                return self.selectedShape
+        return None
 
     def calculateOffsets(self, shape, point):
         rect = shape.boundingRect()
